@@ -1,11 +1,11 @@
 # HourGlass ⏳
 
-A high-performance, Redis-based rate limiting library for Go that provides daily usage quotas per user and feature.
+A high-performance, light-weight, Redis-based rate limiting library for Go that provides daily usage quotas per user and feature. 
 
 ## Features
 
 - **Daily Rate Limiting**: Automatic daily quota reset with precise time calculations
-- **Multi-Feature Support**: Different limits for different features in the same application
+- **Multi-Feature Support**: Different limits for different features in applications
 - **User-Scoped**: Individual quotas per user for each feature
 - **Atomic Operations**: Redis Lua scripts ensure consistency under high concurrency
 - **Connection Pooling**: Optimized Redis connection management for high throughput
@@ -17,7 +17,7 @@ A high-performance, Redis-based rate limiting library for Go that provides daily
 ### Installation
 
 ```bash
-go get github.com/yourusername/hourglass
+go get github.com/pyljain/hourglass
 ```
 
 ### Basic Usage
@@ -184,7 +184,3 @@ See the [examples/](examples/) directory for complete usage examples including:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Performance Analysis
-
-For detailed performance analysis and optimization recommendations, see [performance.md](performance.md).
