@@ -13,18 +13,18 @@ import (
 var consumeScriptData string
 
 type Config struct {
-	RedisAddress    string         `json:"redisAddress"`
-	RedisPassword   string         `json:"redisPassword"`
-	Limits          map[string]int `json:"limits"`
-	PoolSize        int            `json:"poolSize"`
-	MinIdleConns    int            `json:"minIdleConns"`
-	MaxRetries      int            `json:"maxRetries"`
-	DialTimeout     time.Duration  `json:"dialTimeout"`
-	ReadTimeout     time.Duration  `json:"readTimeout"`
-	WriteTimeout    time.Duration  `json:"writeTimeout"`
-	PoolTimeout     time.Duration  `json:"poolTimeout"`
-	IdleTimeout     time.Duration  `json:"idleTimeout"`
-	MaxConnAge      time.Duration  `json:"maxConnAge"`
+	RedisAddress  string         `json:"redisAddress"`
+	RedisPassword string         `json:"redisPassword"`
+	Limits        map[string]int `json:"limits"`
+	PoolSize      int            `json:"poolSize"`
+	MinIdleConns  int            `json:"minIdleConns"`
+	MaxRetries    int            `json:"maxRetries"`
+	DialTimeout   time.Duration  `json:"dialTimeout"`
+	ReadTimeout   time.Duration  `json:"readTimeout"`
+	WriteTimeout  time.Duration  `json:"writeTimeout"`
+	PoolTimeout   time.Duration  `json:"poolTimeout"`
+	IdleTimeout   time.Duration  `json:"idleTimeout"`
+	MaxConnAge    time.Duration  `json:"maxConnAge"`
 }
 
 type HourGlass struct {
@@ -65,16 +65,16 @@ func New(config *Config) (*HourGlass, error) {
 
 	// Connect to Redis with optimized connection pool settings
 	rdb := redis.NewClient(&redis.Options{
-		Addr:         config.RedisAddress,
-		Password:     config.RedisPassword,
-		DB:           0,
-		PoolSize:     config.PoolSize,
-		MinIdleConns: config.MinIdleConns,
-		MaxRetries:   config.MaxRetries,
-		DialTimeout:  config.DialTimeout,
-		ReadTimeout:  config.ReadTimeout,
-		WriteTimeout: config.WriteTimeout,
-		PoolTimeout:  config.PoolTimeout,
+		Addr:            config.RedisAddress,
+		Password:        config.RedisPassword,
+		DB:              0,
+		PoolSize:        config.PoolSize,
+		MinIdleConns:    config.MinIdleConns,
+		MaxRetries:      config.MaxRetries,
+		DialTimeout:     config.DialTimeout,
+		ReadTimeout:     config.ReadTimeout,
+		WriteTimeout:    config.WriteTimeout,
+		PoolTimeout:     config.PoolTimeout,
 		ConnMaxIdleTime: config.IdleTimeout,
 		ConnMaxLifetime: config.MaxConnAge,
 	})
@@ -93,25 +93,36 @@ func New(config *Config) (*HourGlass, error) {
 	}, nil
 }
 
-func (hg *HourGlass) Get(ctx context.Context, featureName, userName string) (current int, limit int) {
-	key := fmt.Sprintf("%s:%s:%s", featureName, userName, time.Now().UTC().Format("2006-01-02"))
+func getKey(featureName, username string) string {
+	return fmt.Sprintf("%s:%s:%s", featureName, username, time.Now().UTC().Format("2006-01-02"))
+}
 
-	cmd := hg.redisClient.Get(ctx, key)
+func (hg *HourGlass) Get(ctx context.Context, featureName, userName string) (current int, limit int) {
+
+	limit, exists := hg.appConfig.Limits[featureName]
+	if !exists {
+		return -1, -1
+	}
+
+	cmd := hg.redisClient.Get(ctx, getKey(featureName, userName))
 	if cmd.Err() != nil {
-		return 0, hg.appConfig.Limits[featureName]
+		return -1, limit
 	}
 
 	consumed, err := cmd.Int()
 	if err != nil {
-		return 0, hg.appConfig.Limits[featureName]
+		return -1, limit
 	}
 
-	return consumed, hg.appConfig.Limits[featureName]
+	return consumed, limit
 }
 
 func (hg *HourGlass) Consume(ctx context.Context, featureName, userName string) (current int, limit int, can bool) {
-	key := fmt.Sprintf("%s:%s:%s", featureName, userName, time.Now().UTC().Format("2006-01-02"))
-	limit = hg.appConfig.Limits[featureName]
+	key := getKey(featureName, userName)
+	limit, exists := hg.appConfig.Limits[featureName]
+	if !exists {
+		return -1, -1, true
+	}
 
 	// Calculate TTL until end of day
 	ttl := int(timeUntilEndOfDay().Seconds())
@@ -133,9 +144,14 @@ func (hg *HourGlass) Consume(ctx context.Context, featureName, userName string) 
 func (hg *HourGlass) Credit(ctx context.Context, featureName, userName string) (current int, limit int) {
 	key := fmt.Sprintf("%s:%s:%s", featureName, userName, time.Now().UTC().Format("2006-01-02"))
 
+	limit, exists := hg.appConfig.Limits[featureName]
+	if !exists {
+		return -1, -1
+	}
+
 	cmd := hg.redisClient.Decr(ctx, key)
 	if cmd.Err() != nil {
-		return -1, hg.appConfig.Limits[featureName]
+		return -1, limit
 	}
 
 	return int(cmd.Val()), hg.appConfig.Limits[featureName]
